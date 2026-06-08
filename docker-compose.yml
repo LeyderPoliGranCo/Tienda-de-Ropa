@@ -1,0 +1,73 @@
+services:
+  db:
+    image: postgres:15
+    container_name: tienda_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - tienda_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: tienda_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    ports:
+      - "8002:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - tienda_network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: tienda_frontend
+    restart: unless-stopped
+    ports:
+      - "8090:80"
+    depends_on:
+      - backend
+    networks:
+      - tienda_network
+
+  jenkins:
+    build:
+      context: .
+      dockerfile: docker/jenkins/Dockerfile
+    container_name: tienda_jenkins
+    restart: unless-stopped
+    user: root
+    ports:
+      - "8091:8080"
+      - "50001:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - tienda_network
+
+volumes:
+  postgres_data:
+  jenkins_home:
+
+networks:
+  tienda_network:
+    driver: bridge
