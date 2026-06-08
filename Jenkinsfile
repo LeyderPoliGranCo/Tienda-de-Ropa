@@ -8,9 +8,15 @@ pipeline {
             }
         }
 
+        stage('Stop Previous Containers') {
+            steps {
+                sh 'docker compose down || true'
+            }
+        }
+
         stage('Build Images') {
             steps {
-                sh 'docker compose build backend frontend'
+                sh 'docker compose build'
             }
         }
 
@@ -25,6 +31,7 @@ pipeline {
                 sh '''
                     echo "Esperando backend..."
                     sleep 15
+                    docker compose ps
                     docker compose exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"
                 '''
             }
@@ -41,7 +48,7 @@ pipeline {
 
     post {
         always {
-            sh 'docker compose ps'
+            sh 'docker compose ps || true'
         }
     }
 }
