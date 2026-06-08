@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MVP de Tienda de Ropa para el proyecto de Integración Continua">
+    <title>Tienda de Ropa MVP</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1 id="app-title">Tienda de Ropa</h1>
+            <nav>
+                <button id="cart-toggle-btn">Carrito (<span id="cart-count">0</span>)</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section id="catalog-section">
+            <h2>Catálogo de Productos</h2>
+            <div id="product-grid" class="grid-container"></div>
+        </section>
+
+        <section id="cart-modal" class="modal hidden">
+            <div class="modal-content">
+                <span id="close-modal-btn" class="close-btn">&times;</span>
+                <h2>Tu Carrito</h2>
+                <div id="cart-items"></div>
+                <div class="cart-summary">
+                    <p>Total: $<span id="cart-total">0.00</span></p>
+                    <button id="checkout-btn">Proceder al Pago</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="payment-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Simulación de Pago</h2>
+                <form id="payment-form">
+                    <div class="form-group">
+                        <label for="card-name">Nombre en la tarjeta</label>
+                        <input type="text" id="card-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="card-number">Número de tarjeta</label>
+                        <input type="text" id="card-number" placeholder="1234 5678 1234 5678" required>
+                    </div>
+                    <button type="submit" id="submit-payment-btn">Pagar</button>
+                    <button type="button" id="cancel-payment-btn">Cancelar</button>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
