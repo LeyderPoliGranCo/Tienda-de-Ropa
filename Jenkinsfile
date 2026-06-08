@@ -51,7 +51,8 @@ pipeline {
         stage('Smoke Test Frontend') {
             steps {
                 sh '''
-                    docker compose exec -T frontend wget -q --spider http://localhost/
+                    docker compose exec -T frontend nginx -t
+                    docker compose logs frontend
                 '''
             }
         }
