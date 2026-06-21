@@ -51,11 +51,21 @@ const app = (function () {
         },
         containers: {
             productGrid: document.getElementById('product-grid'),
-            cartItems: document.getElementById('cart-items')
+            cartItems: document.getElementById('cart-items'),
+            adminTableBody: document.getElementById('admin-table-body')
         },
         elements: {
             cartCount: document.getElementById('cart-count'),
             cartTotal: document.getElementById('cart-total')
+        },
+        forms: {
+            productForm: document.getElementById('admin-product-form'),
+            id: document.getElementById('product-id'),
+            name: document.getElementById('product-name'),
+            price: document.getElementById('product-price'),
+            category: document.getElementById('product-category'),
+            url: document.getElementById('product-url'),
+            desc: document.getElementById('product-desc')
         }
     };
 
@@ -107,15 +117,125 @@ const app = (function () {
         return col;
     }
 
-    function renderCatalog(products) {
+    function renderCatalog() {
         if (!UI.containers.productGrid) return;
-        
         UI.containers.productGrid.innerHTML = '';
-        
-        products.forEach(product => {
+        state.products.forEach(product => {
             const card = createProductCard(product);
             UI.containers.productGrid.appendChild(card);
         });
+    }
+
+    function renderAdminTable() {
+        if (!UI.containers.adminTableBody) return;
+        UI.containers.adminTableBody.innerHTML = '';
+        
+        state.products.forEach(product => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-4 py-3">
+                    <img src="${product.url_imagen}" alt="${product.nombre}" class="rounded shadow-sm" style="width: 50px; height: 50px; object-fit: cover;">
+                </td>
+                <td class="py-3 fw-medium text-dark">${product.nombre}</td>
+                <td class="py-3"><span class="badge bg-secondary">${product.categoria}</span></td>
+                <td class="py-3 fw-bold">${formatCurrency(product.precio)}</td>
+                <td class="px-4 py-3 text-end">
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-warning" onclick="app.editProduct(${product.id})">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="app.deleteProduct(${product.id})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            UI.containers.adminTableBody.appendChild(tr);
+        });
+    }
+
+    function saveProductLogic(productData) {
+        if (productData.id) {
+            const index = state.products.findIndex(p => p.id === parseInt(productData.id));
+            if (index !== -1) {
+                state.products[index] = { ...state.products[index], ...productData, id: parseInt(productData.id) };
+            }
+        } else {
+            const newId = state.products.length > 0 ? Math.max(...state.products.map(p => p.id)) + 1 : 1;
+            state.products.push({ ...productData, id: newId });
+        }
+        renderCatalog();
+        renderAdminTable();
+    }
+
+    function handleProductSubmit(event) {
+        event.preventDefault();
+        
+        const urlValue = UI.forms.url.value.trim();
+        try {
+            new URL(urlValue);
+        } catch (_) {
+            alert('URL de imagen inválida');
+            return;
+        }
+
+        const productData = {
+            id: UI.forms.id.value ? parseInt(UI.forms.id.value) : null,
+            nombre: UI.forms.name.value.trim(),
+            precio: parseInt(UI.forms.price.value),
+            categoria: UI.forms.category.value,
+            url_imagen: urlValue,
+            descripcion: UI.forms.desc.value.trim()
+        };
+
+        saveProductLogic(productData);
+
+        const collapseEl = document.getElementById('admin-form-collapse');
+        if (collapseEl) {
+            const bsCollapse = bootstrap.Collapse.getInstance(collapseEl) || new bootstrap.Collapse(collapseEl);
+            bsCollapse.hide();
+        }
+        UI.forms.productForm.reset();
+        UI.forms.id.value = '';
+    }
+
+    function editProduct(productId) {
+        const product = state.products.find(p => p.id === productId);
+        if (!product) return;
+
+        UI.forms.id.value = product.id;
+        UI.forms.name.value = product.nombre;
+        UI.forms.price.value = product.precio;
+        UI.forms.category.value = product.categoria;
+        UI.forms.url.value = product.url_imagen;
+        UI.forms.desc.value = product.descripcion;
+
+        const collapseEl = document.getElementById('admin-form-collapse');
+        if (collapseEl) {
+            const bsCollapse = bootstrap.Collapse.getInstance(collapseEl) || new bootstrap.Collapse(collapseEl, {toggle: false});
+            bsCollapse.show();
+        }
+    }
+
+    function deleteProduct(productId) {
+        if (!confirm('¿Seguro que deseas eliminar este producto?')) return;
+        state.products = state.products.filter(p => p.id !== productId);
+        
+        const itemInCart = state.cart.find(c => c.id === productId);
+        if (itemInCart) {
+            state.cart = state.cart.filter(c => c.id !== productId);
+            saveCart();
+        }
+
+        renderCatalog();
+        renderAdminTable();
+    }
+
+    function resetAdminForm() {
+        if (UI.forms.productForm) {
+            UI.forms.productForm.reset();
+            UI.forms.id.value = '';
+        }
     }
 
     async function fetchProducts() {
@@ -133,7 +253,8 @@ const app = (function () {
 
     async function loadCatalog() {
         state.products = await fetchProducts();
-        renderCatalog(state.products);
+        renderCatalog();
+        renderAdminTable();
     }
 
     function updateCartUI() {
@@ -231,30 +352,49 @@ const app = (function () {
         }
     }
 
+    function testFormularioInventario() {
+        try {
+            const initialLength = state.products.length;
+            
+            const dummyProduct = {
+                id: null,
+                nombre: "Producto Test CRUD",
+                precio: 99000,
+                categoria: "Camisetas",
+                url_imagen: "https://via.placeholder.com/150",
+                descripcion: "Test desc"
+            };
+
+            saveProductLogic(dummyProduct);
+            
+            console.assert(state.products.length === initialLength + 1);
+            
+            const createdProduct = state.products.find(p => p.nombre === "Producto Test CRUD");
+            console.assert(createdProduct !== undefined);
+            
+            state.products = state.products.filter(p => p.id !== createdProduct.id);
+            renderCatalog();
+            renderAdminTable();
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
     function testRenderizacionCatalogo() {
         try {
             const originalHTML = UI.containers.productGrid ? UI.containers.productGrid.innerHTML : '';
-            
             const testProducts = [
-                {
-                    id: 999,
-                    nombre: "Test Product 1",
-                    precio: 1000,
-                    descripcion: "Test desc",
-                    categoria: "Test",
-                    url_imagen: "https://via.placeholder.com/150"
-                },
-                {
-                    id: 1000,
-                    nombre: "Test Product 2",
-                    precio: 2000,
-                    descripcion: "Test desc",
-                    categoria: "Test",
-                    url_imagen: "https://via.placeholder.com/150"
-                }
+                { id: 999, nombre: "Test 1", precio: 1000, descripcion: "T", categoria: "C", url_imagen: "" },
+                { id: 1000, nombre: "Test 2", precio: 2000, descripcion: "T", categoria: "C", url_imagen: "" }
             ];
             
-            renderCatalog(testProducts);
+            if (UI.containers.productGrid) {
+                UI.containers.productGrid.innerHTML = '';
+                testProducts.forEach(product => {
+                    const card = createProductCard(product);
+                    UI.containers.productGrid.appendChild(card);
+                });
+            }
             
             const cards = UI.containers.productGrid.querySelectorAll('.col-12.col-sm-6.col-md-4');
             console.assert(cards.length === 2);
@@ -324,6 +464,7 @@ const app = (function () {
 
             testRenderizacionCatalogo();
             testLogicaCarrito();
+            testFormularioInventario();
         } catch (error) {
             console.error(error);
         }
@@ -341,7 +482,11 @@ const app = (function () {
         switchView,
         addToCart,
         removeFromCart,
-        processPayment
+        processPayment,
+        resetAdminForm,
+        handleProductSubmit,
+        editProduct,
+        deleteProduct
     };
 
 })();
