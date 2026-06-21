@@ -1,7 +1,8 @@
 const app = (function () {
     const state = {
         currentView: 'catalog',
-        products: []
+        products: [],
+        cart: JSON.parse(localStorage.getItem('cart')) || []
     };
 
     const MOCK_PRODUCTS = [
@@ -49,7 +50,12 @@ const app = (function () {
             admin: document.getElementById('nav-admin')
         },
         containers: {
-            productGrid: document.getElementById('product-grid')
+            productGrid: document.getElementById('product-grid'),
+            cartItems: document.getElementById('cart-items')
+        },
+        elements: {
+            cartCount: document.getElementById('cart-count'),
+            cartTotal: document.getElementById('cart-total')
         }
     };
 
@@ -120,6 +126,7 @@ const app = (function () {
                 }, 300);
             });
         } catch (error) {
+            console.error(error);
             return [];
         }
     }
@@ -129,7 +136,99 @@ const app = (function () {
         renderCatalog(state.products);
     }
 
+    function updateCartUI() {
+        if (!UI.elements.cartCount || !UI.elements.cartTotal || !UI.containers.cartItems) return;
+
+        const totalItems = state.cart.reduce((sum, item) => sum + item.cantidad, 0);
+        const totalPrice = state.cart.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+
+        if (totalItems > 0) {
+            UI.elements.cartCount.textContent = totalItems;
+            UI.elements.cartCount.classList.remove('d-none');
+        } else {
+            UI.elements.cartCount.classList.add('d-none');
+        }
+
+        UI.elements.cartTotal.textContent = formatCurrency(totalPrice);
+
+        if (state.cart.length === 0) {
+            UI.containers.cartItems.innerHTML = `
+                <div class="h-100 d-flex flex-column justify-content-center align-items-center text-muted w-100">
+                    <i class="bi bi-cart-x fs-1 mb-3 text-secondary opacity-50"></i>
+                    <p class="fst-italic text-center">Tu carrito está vacío.</p>
+                </div>
+            `;
+            return;
+        }
+
+        UI.containers.cartItems.innerHTML = '<ul class="list-group list-group-flush w-100"></ul>';
+        const list = UI.containers.cartItems.querySelector('ul');
+
+        state.cart.forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item bg-transparent d-flex justify-content-between align-items-center px-0 py-3';
+            li.innerHTML = `
+                <div>
+                    <h6 class="mb-1 text-dark fw-bold">${item.nombre}</h6>
+                    <small class="text-muted fw-medium">${item.cantidad} x ${formatCurrency(item.precio)}</small>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="fw-bold text-primary">${formatCurrency(item.precio * item.cantidad)}</span>
+                    <button class="btn btn-sm btn-outline-danger border-0" onclick="app.removeFromCart(${item.id})">
+                        <i class="bi bi-trash fs-5"></i>
+                    </button>
+                </div>
+            `;
+            list.appendChild(li);
+        });
+    }
+
+    function saveCart() {
+        localStorage.setItem('cart', JSON.stringify(state.cart));
+        updateCartUI();
+    }
+
     function addToCart(productId) {
+        const product = state.products.find(p => p.id === productId);
+        if (!product) return;
+
+        const existingItem = state.cart.find(item => item.id === productId);
+        if (existingItem) {
+            existingItem.cantidad += 1;
+        } else {
+            state.cart.push({
+                id: product.id,
+                nombre: product.nombre,
+                precio: product.precio,
+                cantidad: 1
+            });
+        }
+        saveCart();
+    }
+
+    function removeFromCart(productId) {
+        const existingItem = state.cart.find(item => item.id === productId);
+        if (!existingItem) return;
+
+        if (existingItem.cantidad > 1) {
+            existingItem.cantidad -= 1;
+        } else {
+            state.cart = state.cart.filter(item => item.id !== productId);
+        }
+        saveCart();
+    }
+
+    function processPayment() {
+        if (state.cart.length === 0) return;
+        alert('¡Compra realizada con éxito! Gracias por preferir Tienda MVP.');
+        state.cart = [];
+        saveCart();
+        
+        const offcanvasEl = document.getElementById('cart-modal');
+        if (offcanvasEl) {
+            const offcanvasInstance = bootstrap.Offcanvas.getInstance(offcanvasEl) || new bootstrap.Offcanvas(offcanvasEl);
+            offcanvasInstance.hide();
+        }
     }
 
     function testRenderizacionCatalogo() {
@@ -164,6 +263,47 @@ const app = (function () {
                 UI.containers.productGrid.innerHTML = originalHTML;
             }
         } catch (error) {
+            console.error(error);
+        }
+    }
+
+    function testLogicaCarrito() {
+        try {
+            const tempCartState = JSON.stringify(state.cart);
+            state.cart = [];
+            
+            const dummyProduct = {
+                id: 888,
+                nombre: "Mock Shirt",
+                precio: 50000,
+                descripcion: "Mock desc",
+                categoria: "Mock",
+                url_imagen: ""
+            };
+            state.products.push(dummyProduct);
+            
+            addToCart(888);
+            addToCart(888);
+            
+            console.assert(state.cart.length === 1);
+            console.assert(state.cart[0].cantidad === 2);
+            
+            const savedCart = JSON.parse(localStorage.getItem('cart'));
+            console.assert(savedCart !== null);
+            console.assert(savedCart.length === 1);
+            console.assert(savedCart[0].cantidad === 2);
+            
+            state.products = state.products.filter(p => p.id !== 888);
+            
+            state.cart = JSON.parse(tempCartState);
+            if (state.cart.length > 0) {
+                localStorage.setItem('cart', tempCartState);
+            } else {
+                localStorage.removeItem('cart');
+            }
+            updateCartUI();
+        } catch (error) {
+            console.error(error);
         }
     }
 
@@ -183,20 +323,25 @@ const app = (function () {
             console.assert(state.currentView === 'catalog');
 
             testRenderizacionCatalogo();
+            testLogicaCarrito();
         } catch (error) {
+            console.error(error);
         }
     }
 
-    function init() {
+    async function init() {
         switchView('catalog');
-        loadCatalog();
+        updateCartUI();
+        await loadCatalog();
         runTests();
     }
 
     return {
         init,
         switchView,
-        addToCart
+        addToCart,
+        removeFromCart,
+        processPayment
     };
 
 })();
