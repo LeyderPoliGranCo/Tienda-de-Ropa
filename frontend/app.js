@@ -154,21 +154,32 @@ const app = (function () {
         });
     }
 
-    function saveProductLogic(productData) {
-        if (productData.id) {
-            const index = state.products.findIndex(p => p.id === parseInt(productData.id));
-            if (index !== -1) {
-                state.products[index] = { ...state.products[index], ...productData, id: parseInt(productData.id) };
+    async function saveProductLogic(productData) {
+        try {
+            if (productData.id) {
+                const res = await fetch(`http://localhost:8002/productos/${productData.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(productData)
+                });
+                if (!res.ok) throw new Error('Error al actualizar');
+            } else {
+                const { id, ...data } = productData;
+                const res = await fetch('http://localhost:8002/productos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (!res.ok) throw new Error('Error al crear');
             }
-        } else {
-            const newId = state.products.length > 0 ? Math.max(...state.products.map(p => p.id)) + 1 : 1;
-            state.products.push({ ...productData, id: newId });
+            await loadCatalog();
+        } catch (e) {
+            console.error(e);
+            alert('Error al guardar el producto.');
         }
-        renderCatalog();
-        renderAdminTable();
     }
 
-    function handleProductSubmit(event) {
+    async function handleProductSubmit(event) {
         event.preventDefault();
         
         const urlValue = UI.forms.url.value.trim();
@@ -188,7 +199,7 @@ const app = (function () {
             descripcion: UI.forms.desc.value.trim()
         };
 
-        saveProductLogic(productData);
+        await saveProductLogic(productData);
 
         const collapseEl = document.getElementById('admin-form-collapse');
         if (collapseEl) {
@@ -217,18 +228,25 @@ const app = (function () {
         }
     }
 
-    function deleteProduct(productId) {
+    async function deleteProduct(productId) {
         if (!confirm('¿Seguro que deseas eliminar este producto?')) return;
-        state.products = state.products.filter(p => p.id !== productId);
         
-        const itemInCart = state.cart.find(c => c.id === productId);
-        if (itemInCart) {
-            state.cart = state.cart.filter(c => c.id !== productId);
-            saveCart();
+        try {
+            const res = await fetch(`http://localhost:8002/productos/${productId}`, {
+                method: 'DELETE'
+            });
+            if (!res.ok) throw new Error('Error al eliminar');
+            
+            const itemInCart = state.cart.find(c => c.id === productId);
+            if (itemInCart) {
+                state.cart = state.cart.filter(c => c.id !== productId);
+                saveCart();
+            }
+            await loadCatalog();
+        } catch (e) {
+            console.error(e);
+            alert('Error al eliminar');
         }
-
-        renderCatalog();
-        renderAdminTable();
     }
 
     function resetAdminForm() {
@@ -240,11 +258,9 @@ const app = (function () {
 
     async function fetchProducts() {
         try {
-            return await new Promise((resolve) => {
-                setTimeout(() => {
-                    resolve(MOCK_PRODUCTS);
-                }, 300);
-            });
+            const res = await fetch('http://localhost:8002/productos');
+            if (!res.ok) throw new Error('Error en la red');
+            return await res.json();
         } catch (error) {
             console.error(error);
             return [];
@@ -474,7 +490,6 @@ const app = (function () {
         switchView('catalog');
         updateCartUI();
         await loadCatalog();
-        runTests();
     }
 
     return {
